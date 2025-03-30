@@ -19,7 +19,7 @@ struct pcb_t * dequeue(struct queue_t * q) {
          * in the queue [q] and remember to remove it from q
          * */
 	if(!empty(q)){
-		struct pcb_t *  proc = q->proc[0]
+		struct pcb_t *  proc = q->proc[0];
 		if(q->size == 1){
 			q->proc[0] = NULL;
 		}
