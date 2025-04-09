@@ -4,7 +4,9 @@
 #include "string.h"
 #include <pthread.h>
 #include <stdio.h>
-
+// Thêm
+#include "common.h"
+/////////
 static BYTE _ram[RAM_SIZE];
 
 static struct {
@@ -45,9 +47,12 @@ static struct trans_table_t * get_trans_table(
 	
 	/* DO NOTHING HERE. This mem is obsoleted */
 
-	int i;
+	int i; 
 	for (i = 0; i < page_table->size; i++) {
 		// Enter your code here
+		if(page_table->table[i].v_index == index) {
+			return page_table->table->next_lv;
+		}
 	}
 	return NULL;
 
@@ -80,7 +85,10 @@ static int translate(
 	for (i = 0; i < trans_table->size; i++) {
 		if (trans_table->table[i].v_index == second_lv) {
 			/* DO NOTHING HERE. This mem is obsoleted */
-			return 1;
+            addr_t frame_number = trans_table->table[i].p_index;
+
+            *physical_addr = frame_number * PAGE_SIZE + offset;
+            return 1;
 		}
 	}
 	return 0;	
@@ -104,6 +112,21 @@ addr_t alloc_mem(uint32_t size, struct pcb_t * proc) {
 	 * For virtual memory space, check bp (break pointer).
 	 * */
 	
+	 if (proc->bp + num_pages * PAGE_SIZE <= USER_MEM_LIMIT) {  
+        int free_frames[num_pages]; 
+        int found_pages = 0;
+
+        for (int i = 0; i < NUM_PAGES && found_pages < num_pages; i++) {
+            if (_mem_stat[i].proc == 0) { // Nếu trang này chưa được sử dụng
+                free_frames[found_pages++] = i;
+            }
+        }
+
+        if (found_pages == num_pages) {
+            mem_avail = 1;  // Đủ bộ nhớ để cấp phát
+        }
+    }
+	
 	if (mem_avail) {
 		/* We could allocate new memory region to the process */
 		ret_mem = proc->bp;
@@ -114,14 +137,58 @@ addr_t alloc_mem(uint32_t size, struct pcb_t * proc) {
 		 * 	- Add entries to segment table page tables of [proc]
 		 * 	  to ensure accesses to allocated memory slot is
 		 * 	  valid. */
+		for (int i = 0; i < num_pages; i++) {
+			int fpn = free_frames[i]; 
+			_mem_stat[fpn].proc = proc->pid;
+			_mem_stat[fpn].index = i;
+			_mem_stat[fpn].next = (i == num_pages - 1) ? -1 : free_frames[i + 1];
+
+			// Cập nhật bảng trang
+			uint32_t page_num = (ret_mem / PAGE_SIZE) + i;
+			proc->page_table[page_num] = fpn;
+		}
 	}
 	pthread_mutex_unlock(&mem_lock);
 	return ret_mem;
 }
 
-int free_mem(addr_t address, struct pcb_t * proc) {
-	/* DO NOTHING HERE. This mem is obsoleted */
-	return 0;
+int free_mem(addr_t address, struct pcb_t *proc) {
+    pthread_mutex_lock(&mem_lock);
+
+    uint32_t page_num = address / PAGE_SIZE;
+    
+    // Kiểm tra xem địa chỉ có hợp lệ không
+    if (proc->page_table[page_num] == 0) {
+        pthread_mutex_unlock(&mem_lock);
+        return -1; // Không có bộ nhớ nào được cấp phát ở đây
+    }
+
+    int fpn = GETVAL(proc->page_table[page_num], PAGING_PTE_FPN_MASK, PAGING_PTE_FPN_LOBIT);
+
+    // Giải phóng từng trang
+    while (fpn != -1) {
+        int next_fpn = _mem_stat[fpn].next;
+
+        // Đánh dấu frame này là trống
+        _mem_stat[fpn].proc = 0;
+        _mem_stat[fpn].index = 0;
+        _mem_stat[fpn].next = -1;
+
+        // Xóa entry trong bảng trang
+        proc->page_table[page_num] = 0;
+
+        // Chuyển sang frame tiếp theo
+        fpn = next_fpn;
+        page_num++;
+    }
+
+    // Cập nhật break pointer nếu giải phóng vùng cuối cùng
+    if (address + PAGE_SIZE >= proc->bp) {
+        proc->bp = address;
+    }
+
+    pthread_mutex_unlock(&mem_lock);
+    return 0;
 }
 
 int read_mem(addr_t address, struct pcb_t * proc, BYTE * data) {
