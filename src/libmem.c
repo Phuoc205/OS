@@ -211,7 +211,7 @@ int pg_getpage(struct mm_struct *mm, int pgn, int *fpn, struct pcb_t *caller)
   { /* Page is not online, make it actively living */
     int vicpgn, swpfpn; 
     int vicfpn;
-    uint32_t vicpte;
+    // uint32_t vicpte;
 
     int tgtfpn = PAGING_PTE_SWP(pte);//the target frame storing our variable
 
@@ -224,7 +224,7 @@ int pg_getpage(struct mm_struct *mm, int pgn, int *fpn, struct pcb_t *caller)
 
     /* TODO: Implement swap frame from MEMRAM to MEMSWP and vice versa*/
 
-    vicpte = mm->pgd[vicpgn];
+    // vicpte = mm->pgd[vicpgn];
     vicfpn = PAGING_PTE_FPN(pte);
 
     /* TODO copy victim frame to swap 
