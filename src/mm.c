@@ -80,7 +80,7 @@ int pte_set_fpn(uint32_t *pte, int fpn)
 /*
  * vmap_page_range - map a range of page at aligned address
  */
-int vmap_page_range(struct pcb_t *caller,           // process call
+int vmap_page_range(struct pcb_t *caller,           // process call                                 // done
                     int addr,                       // start address which is aligned to pagesz
                     int pgnum,                      // num of mapping page
                     struct framephy_struct *frames, // list of the mapped frames
@@ -122,7 +122,7 @@ int vmap_page_range(struct pcb_t *caller,           // process call
  * @frm_lst   : frame list
  */
 
-int alloc_pages_range(struct pcb_t *caller, int req_pgnum, struct framephy_struct **frm_lst)
+int alloc_pages_range(struct pcb_t *caller, int req_pgnum, struct framephy_struct **frm_lst) // done
 {
   int pgit, fpn;
   struct framephy_struct *newfp_str = NULL;
@@ -143,7 +143,7 @@ int alloc_pages_range(struct pcb_t *caller, int req_pgnum, struct framephy_struc
       newfp_str->fpn = fpn;
       newfp_str->fp_next = *frm_lst;
       newfp_str->owner = caller->mm;
-      *frm_lst = newfp_str;      
+      *frm_lst = newfp_str;
     }
     else
     { // TODO: ERROR CODE of obtaining somes but not enough frames
@@ -248,7 +248,7 @@ int __swap_cp_page(struct memphy_struct *mpsrc, int srcfpn,
  * @mm:     self mm
  * @caller: mm owner
  */
-int init_mm(struct mm_struct *mm, struct pcb_t *caller)
+int init_mm(struct mm_struct *mm, struct pcb_t *caller) // done
 {
   struct vm_area_struct *vma0 = malloc(sizeof(struct vm_area_struct));
 

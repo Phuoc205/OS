@@ -112,18 +112,18 @@ addr_t alloc_mem(uint32_t size, struct pcb_t * proc) {
 	 * For virtual memory space, check bp (break pointer).
 	 * */
 	
-	 if (proc->bp + num_pages * PAGE_SIZE <= USER_MEM_LIMIT) {  
+	 if (proc->bp + num_pages * PAGE_SIZE <= RAM_SIZE) {
         int free_frames[num_pages]; 
         int found_pages = 0;
 
         for (int i = 0; i < NUM_PAGES && found_pages < num_pages; i++) {
-            if (_mem_stat[i].proc == 0) { // Nếu trang này chưa được sử dụng
+            if (_mem_stat[i].proc == 0) {
                 free_frames[found_pages++] = i;
             }
         }
 
         if (found_pages == num_pages) {
-            mem_avail = 1;  // Đủ bộ nhớ để cấp phát
+            mem_avail = 1;
         }
     }
 	

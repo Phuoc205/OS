@@ -158,11 +158,23 @@ int MEMPHY_get_freefp(struct memphy_struct *mp, int *retfpn)
    return 0;
 }
 
-int MEMPHY_dump(struct memphy_struct *mp)
+int MEMPHY_dump(struct memphy_struct *mp) // may be done
 {
   /*TODO dump memphy contnt mp->storage
    *     for tracing the memory content
    */
+   if (!mp || !mp->storage) return -1;
+
+   printf("=== Memory Dump (size: %d bytes) ===\n", mp->maxsz);
+
+   for (int i = 0; i < mp->maxsz; i++) {
+      if (i % PAGE_SIZE == 0)
+         printf("\n[Frame %02d] ", i / PAGE_SIZE);
+
+      printf("%02x ", mp->storage[i]);
+   }
+
+   printf("\n=== End of Dump ===\n");
    return 0;
 }
 
