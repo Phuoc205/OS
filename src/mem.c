@@ -6,6 +6,7 @@
 #include <stdio.h>
 // Thêm
 #include "common.h"
+#include "mm.h"
 /////////
 static BYTE _ram[RAM_SIZE];
 
@@ -111,41 +112,45 @@ addr_t alloc_mem(uint32_t size, struct pcb_t * proc) {
 	 * to know whether this page has been used by a process.
 	 * For virtual memory space, check bp (break pointer).
 	 * */
-	
-	 if (proc->bp + num_pages * PAGE_SIZE <= RAM_SIZE) {
-        int free_frames[num_pages]; 
-        int found_pages = 0;
+	int free_frames[num_pages];
+	int found_pages = 0;
 
-        for (int i = 0; i < NUM_PAGES && found_pages < num_pages; i++) {
-            if (_mem_stat[i].proc == 0) {
-                free_frames[found_pages++] = i;
-            }
-        }
+	for (int i = 0; i < NUM_PAGES && found_pages < num_pages; i++) {
+		if (_mem_stat[i].proc == 0) {
+			free_frames[found_pages++] = i;
+		}
+	}
 
-        if (found_pages == num_pages) {
-            mem_avail = 1;
-        }
-    }
-	
+	if (found_pages == num_pages /* && proc->bp + num_pages * PAGE_SIZE <= VIRTUAL_SPACE_LIMIT */) {
+		mem_avail = 1;
+	}
+
 	if (mem_avail) {
-		/* We could allocate new memory region to the process */
 		ret_mem = proc->bp;
 		proc->bp += num_pages * PAGE_SIZE;
-		/* Update status of physical pages which will be allocated
-		 * to [proc] in _mem_stat. Tasks to do:
-		 * 	- Update [proc], [index], and [next] field
-		 * 	- Add entries to segment table page tables of [proc]
-		 * 	  to ensure accesses to allocated memory slot is
-		 * 	  valid. */
+
 		for (int i = 0; i < num_pages; i++) {
-			int fpn = free_frames[i]; 
+			int fpn = free_frames[i];
 			_mem_stat[fpn].proc = proc->pid;
 			_mem_stat[fpn].index = i;
 			_mem_stat[fpn].next = (i == num_pages - 1) ? -1 : free_frames[i + 1];
 
-			// Cập nhật bảng trang
 			uint32_t page_num = (ret_mem / PAGE_SIZE) + i;
-			proc->page_table[page_num] = fpn;
+			int seg_idx = get_first_lv(page_num);
+			int page_idx = get_second_lv(page_num);
+
+			struct trans_table_t *trans_table = get_trans_table(seg_idx, proc->page_table);
+			if (trans_table == NULL) {
+				trans_table = (struct trans_table_t *)malloc(sizeof(struct trans_table_t));
+				trans_table->size = 0;
+				proc->page_table->table[proc->page_table->size].v_index = seg_idx;
+				proc->page_table->table[proc->page_table->size].next_lv = trans_table;
+				proc->page_table->size++;
+			}
+
+			trans_table->table[trans_table->size].v_index = page_idx;
+			trans_table->table[trans_table->size].p_index = fpn;
+			trans_table->size++;
 		}
 	}
 	pthread_mutex_unlock(&mem_lock);
@@ -156,33 +161,70 @@ int free_mem(addr_t address, struct pcb_t *proc) {
     pthread_mutex_lock(&mem_lock);
 
     uint32_t page_num = address / PAGE_SIZE;
-    
-    // Kiểm tra xem địa chỉ có hợp lệ không
-    if (proc->page_table[page_num] == 0) {
-        pthread_mutex_unlock(&mem_lock);
-        return -1; // Không có bộ nhớ nào được cấp phát ở đây
+    int seg_idx = get_first_lv(page_num);
+    int page_idx = get_second_lv(page_num);
+
+    // Tìm bảng trans_table (level 2) tương ứng
+    struct trans_table_t *trans_table = NULL;
+    int found_seg = 0;
+    for (int i = 0; i < proc->page_table->size; i++) {
+        if (proc->page_table->table[i].v_index == seg_idx) {
+            trans_table = proc->page_table->table[i].next_lv;
+            found_seg = 1;
+            break;
+        }
     }
 
-    int fpn = GETVAL(proc->page_table[page_num], PAGING_PTE_FPN_MASK, PAGING_PTE_FPN_LOBIT);
+    if (!found_seg || trans_table == NULL) {
+        pthread_mutex_unlock(&mem_lock);
+        return -1; // Không tìm thấy segment phù hợp
+    }
 
-    // Giải phóng từng trang
+    // Tìm frame đầu tiên trong bảng trans_table
+    int fpn = -1, page_entry_idx = -1;
+    for (int i = 0; i < trans_table->size; i++) {
+        if (trans_table->table[i].v_index == page_idx) {
+            fpn = trans_table->table[i].p_index;
+            page_entry_idx = i;
+            break;
+        }
+    }
+
+    if (fpn == -1) {
+        pthread_mutex_unlock(&mem_lock);
+        return -1; // Không tìm thấy page entry
+    }
+
+    // Giải phóng chuỗi frame liên tiếp
     while (fpn != -1) {
         int next_fpn = _mem_stat[fpn].next;
-
-        // Đánh dấu frame này là trống
         _mem_stat[fpn].proc = 0;
         _mem_stat[fpn].index = 0;
         _mem_stat[fpn].next = -1;
-
-        // Xóa entry trong bảng trang
-        proc->page_table[page_num] = 0;
-
-        // Chuyển sang frame tiếp theo
         fpn = next_fpn;
-        page_num++;
     }
 
-    // Cập nhật break pointer nếu giải phóng vùng cuối cùng
+    // Xóa entry khỏi trans_table
+    for (int i = page_entry_idx; i < trans_table->size - 1; i++) {
+        trans_table->table[i] = trans_table->table[i + 1];
+    }
+    trans_table->size--;
+
+    // Nếu trans_table rỗng, xóa khỏi page_table cấp 1
+    if (trans_table->size == 0) {
+        for (int i = 0; i < proc->page_table->size; i++) {
+            if (proc->page_table->table[i].v_index == seg_idx) {
+                free(proc->page_table->table[i].next_lv);
+                for (int j = i; j < proc->page_table->size - 1; j++) {
+                    proc->page_table->table[j] = proc->page_table->table[j + 1];
+                }
+                proc->page_table->size--;
+                break;
+            }
+        }
+    }
+
+    // Cập nhật break pointer nếu cần
     if (address + PAGE_SIZE >= proc->bp) {
         proc->bp = address;
     }
