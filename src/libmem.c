@@ -72,13 +72,14 @@ int __alloc(struct pcb_t *caller, int vmaid, int rgid, int size, int *alloc_addr
   struct vm_rg_struct rgnode;
 
   /* TODO: commit the vmaid */
-  // rgnode.vmaid
+  if(rgid < 0 || rgid > PAGING_MAX_SYMTBL_SZ)
+    return -1;
 
   if (get_free_vmrg_area(caller, vmaid, size, &rgnode) == 0)
   {
     caller->mm->symrgtbl[rgid].rg_start = rgnode.rg_start;
     caller->mm->symrgtbl[rgid].rg_end = rgnode.rg_end;
- 
+
     *alloc_addr = rgnode.rg_start;
     pthread_mutex_unlock(&mmvm_lock);
     return 0;
@@ -91,7 +92,7 @@ int __alloc(struct pcb_t *caller, int vmaid, int rgid, int size, int *alloc_addr
   struct vm_area_struct *cur_vma = get_vma_by_num(caller->mm, vmaid);
 
 
-  int inc_sz = PAGING_PAGE_ALIGNSZ(size);
+  // int inc_sz = PAGING_PAGE_ALIGNSZ(size);
 
   /* TODO retrive old_sbrk if needed, current comment out due to compiler redundant warning*/
   int old_sbrk = cur_vma->sbrk;
@@ -145,17 +146,17 @@ int __free(struct pcb_t *caller, int vmaid, int rgid) // done
   caller->mm->symrgtbl[rgid].rg_start = 0;
   caller->mm->symrgtbl[rgid].rg_end = 0;
 
-  int pgn_start = PAGING_PGN(rgnode.rg_start);
-  int pgn_end = PAGING_PGN(rgnode.rg_end);
+  // int pgn_start = PAGING_PGN(rgnode.rg_start);
+  // int pgn_end = PAGING_PGN(rgnode.rg_end);
 
-  for (int i = pgn_start; i < pgn_end; i++) {
-    uint32_t pte = caller->mm->pgd[i];
-    if (PAGING_PAGE_PRESENT(pte)) {
-      int fpn = PAGING_PTE_FPN(pte);
-      MEMPHY_put_freefp(caller->mram, fpn);
-    }
-    caller->mm->pgd[i] = 0;
-  }
+  // for (int i = pgn_start; i < pgn_end; i++) {
+  //   uint32_t pte = caller->mm->pgd[i];
+  //   if (PAGING_PAGE_PRESENT(pte)) {
+  //     int fpn = PAGING_PTE_FPN(pte);
+  //     MEMPHY_put_freefp(caller->mram, fpn);
+  //   }
+  //   caller->mm->pgd[i] = 0;
+  // }
 
   /*enlist the obsoleted memory region */
   enlist_vm_freerg_list(caller->mm, &rgnode);
@@ -265,8 +266,8 @@ int pg_getpage(struct mm_struct *mm, int pgn, int *fpn, struct pcb_t *caller)
 
     /* TODO: Implement swap frame from MEMRAM to MEMSWP and vice versa*/
 
-    // vicpte = mm->pgd[vicpgn];
-    vicfpn = PAGING_PTE_FPN(pte);
+    uint32_t vicpte = mm->pgd[vicpgn];
+    vicfpn = PAGING_PTE_FPN(vicpte);
 
     /* TODO copy victim frame to swap 
      * SWP(vicfpn <--> swpfpn)
@@ -286,12 +287,12 @@ int pg_getpage(struct mm_struct *mm, int pgn, int *fpn, struct pcb_t *caller)
      * with operation SYSMEM_SWP_OP
      */
     /* TODO copy target frame form swap to mem */ 
-    regs.a1 = SYSMEM_SWP_OP;
-    regs.a2 = swpfpn;
-    regs.a3 = tgtfpn;
-    /* SYSCALL 17 sys_memmap */
-    syscall(caller, 17, &regs);
-    // __swap_cp_page(caller->active_mswp, tgtfpn, caller->mram, vicfpn); // gọi hàm trực tiếp vì ko hỗ trợ swap ngược
+    // regs.a1 = SYSMEM_SWP_OP;
+    // regs.a2 = swpfpn;
+    // regs.a3 = tgtfpn;
+    // /* SYSCALL 17 sys_memmap */
+    // syscall(caller, 17, &regs);
+    __swap_cp_page(caller->active_mswp, tgtfpn, caller->mram, vicfpn); // gọi hàm trực tiếp vì ko hỗ trợ swap ngược
 
     /* Update page table */
     pte_set_swap(&mm->pgd[vicpgn], 0, swpfpn);
@@ -365,8 +366,8 @@ int pg_setval(struct mm_struct *mm, int addr, BYTE value, struct pcb_t *caller) 
    *  MEMPHY WRITE
    *  SYSCALL 17 sys_memmap with SYSMEM_IO_WRITE
    */
-  // int phyaddr = fpn * PAGE_SIZE + off;
-  int phyaddr = (fpn << PAGING_ADDR_FPN_LOBIT) + off;
+  int phyaddr = fpn * PAGE_SIZE + off;
+  // int phyaddr = (fpn << PAGING_ADDR_FPN_LOBIT) + off;
 
   struct sc_regs regs;
   regs.a1 = SYSMEM_IO_WRITE;
@@ -417,9 +418,18 @@ int libread(
     *destination = (uint32_t)data;
   }
 #ifdef IODUMP
+  printf("===== PHYSICAL MEMORY AFTER READING =====\n");
   printf("read region=%d offset=%d value=%d\n", source, offset, data);
 #ifdef PAGETBL_DUMP
   print_pgtbl(proc, 0, -1); //print max TBL
+  struct mm_struct *mm = proc->mm;
+  for(int i = 0; i < PAGING_MAX_PGN; i++) {
+    uint32_t pte = mm->pgd[i];
+    if(PAGING_PAGE_PRESENT(pte)) {
+      int fpn = PAGING_PTE_FPN(pte);
+      printf("Page Number: %d -> Frame Number: %d\n", i, fpn);
+    }
+  }
 #endif
   MEMPHY_dump(proc->mram);
 #endif
@@ -455,10 +465,20 @@ int libwrite(
     uint32_t destination, // Index of destination register
     uint32_t offset)
 {
+
 #ifdef IODUMP
+  printf("===== PHYSICAL MEMORY AFTER WRITING =====\n");
   printf("write region=%d offset=%d value=%d\n", destination, offset, data);
 #ifdef PAGETBL_DUMP
   print_pgtbl(proc, 0, -1); //print max TBL
+  struct mm_struct *mm = proc->mm;
+  for(int i = 0; i < PAGING_MAX_PGN; i++) {
+    uint32_t pte = mm->pgd[i];
+    if(PAGING_PAGE_PRESENT(pte)) {
+      int fpn = PAGING_PTE_FPN(pte);
+      printf("Page Number: %d -> Frame Number: %d\n", i, fpn);
+    }
+  }
 #endif
   MEMPHY_dump(proc->mram);
 #endif
@@ -537,17 +557,16 @@ int get_free_vmrg_area(struct pcb_t *caller, int vmaid, int size, struct vm_rg_s
   struct vm_rg_struct *rg_prev = NULL;
   while(rgit != NULL) {
     if (rgit->rg_end - rgit->rg_start >= size) {
-      newrg = rgit;
+      *newrg = *rgit;
       if(rgit == cur_vma->vm_freerg_list) {
         cur_vma->vm_freerg_list = rgit->rg_next;
       } else {
         rg_prev->rg_next = rgit->rg_next;
       }
       return 0;
-    } else {
-      rg_prev = rgit;
-      rgit = rgit->rg_next;
     }
+    rg_prev = rgit;
+    rgit = rgit->rg_next;
   }
 
   return -1;

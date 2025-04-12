@@ -63,7 +63,7 @@ struct vm_rg_struct *get_vm_area_node_at_brk(struct pcb_t *caller, int vmaid, in
   // newrg->rg_end = ...
   */
   newrg->rg_start = cur_vma->sbrk;
-  newrg->rg_end = cur_vma->sbrk + alignedsz;
+  newrg->rg_end = cur_vma->sbrk + size;
 
   cur_vma->sbrk += size;
 
@@ -102,7 +102,7 @@ int inc_vma_limit(struct pcb_t *caller, int vmaid, int inc_sz) // done
 {
   struct vm_rg_struct * newrg = malloc(sizeof(struct vm_rg_struct));
   int inc_amt = PAGING_PAGE_ALIGNSZ(inc_sz);
-  int incnumpage =  inc_amt / PAGING_PAGESZ;
+  // int incnumpage =  inc_amt / PAGING_PAGESZ;
   struct vm_rg_struct *area = get_vm_area_node_at_brk(caller, vmaid, inc_sz, inc_amt);
   struct vm_area_struct *cur_vma = get_vma_by_num(caller->mm, vmaid);
 
@@ -113,13 +113,17 @@ int inc_vma_limit(struct pcb_t *caller, int vmaid, int inc_sz) // done
     return -1; /*Overlap and failed allocation */
 
   /* TODO: Obtain the new vm area based on vmaid */
-  if (area->rg_end > cur_vma->vm_end)
-    cur_vma->vm_end = area->rg_end;
-  // inc_limit_ret...
+  if (area->rg_end > cur_vma->vm_end) {
+    int old_vm_end = cur_vma->vm_end;
+    int new_vm_end = PAGING_PAGE_ALIGNSZ(area->rg_end);
+    int extra_bytes = new_vm_end - old_vm_end;
+    int new_pages = extra_bytes / PAGING_PAGESZ;
 
-  if (vm_map_ram(caller, area->rg_start, area->rg_end, 
-                    old_end, incnumpage , newrg) < 0)
-    return -1; /* Map the memory to MEMRAM */
+    cur_vma->vm_end = new_vm_end;
+
+    if (vm_map_ram(caller, area->rg_start, area->rg_end, old_end, new_pages , newrg) < 0)
+      return -1; /* Map the memory to MEMRAM */
+  }
 
   return 0;
 }
