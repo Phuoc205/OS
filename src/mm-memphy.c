@@ -163,18 +163,16 @@ int MEMPHY_dump(struct memphy_struct *mp) // may be done
   /*TODO dump memphy contnt mp->storage
    *     for tracing the memory content
    */
-   if (!mp || !mp->storage) return -1;
-
-   printf("=== Memory Dump (size: %d bytes) ===\n", mp->maxsz);
-
+   printf("================================================================\n");
+   printf("===== PHYSICAL MEMORY DUMP =====\n");
    for (int i = 0; i < mp->maxsz; i++) {
-      if (i % PAGE_SIZE == 0)
-         printf("\n[Frame %02d] ", i / PAGE_SIZE);
-
-      printf("%02x ", mp->storage[i]);
+      if (mp->storage[i] != 0) {
+      printf("BYTE %08x: %d\n", i, mp->storage[i]);
+      }
    }
+   printf("===== PHYSICAL MEMORY END-DUMP =====\n");
+   printf("================================================================\n");
 
-   printf("\n=== End of Dump ===\n");
    return 0;
 }
 
