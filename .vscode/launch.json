@@ -8,8 +8,8 @@
       "args": [],
       "stopAtEntry": false,
       "externalConsole": true,
-      "cwd": "c:/Users/LEGION/Downloads/ossim_sierra/ossim_sierra",
-      "program": "c:/Users/LEGION/Downloads/ossim_sierra/ossim_sierra/build/Debug/outDebug",
+      "cwd": "${workspaceFolder}",
+      "program": "C:/Users/LEGION/Downloads/ossim_sierra/ossim_sierra/src/os.c",
       "MIMode": "gdb",
       "miDebuggerPath": "gdb",
       "setupCommands": [

@@ -293,6 +293,7 @@ int pg_getpage(struct mm_struct *mm, int pgn, int *fpn, struct pcb_t *caller)
     // /* SYSCALL 17 sys_memmap */
     // syscall(caller, 17, &regs);
     __swap_cp_page(caller->active_mswp, tgtfpn, caller->mram, vicfpn); // gọi hàm trực tiếp vì ko hỗ trợ swap ngược
+    *fpn = vicfpn;
 
     /* Update page table */
     pte_set_swap(&mm->pgd[vicpgn], 0, swpfpn);
@@ -465,7 +466,7 @@ int libwrite(
     uint32_t destination, // Index of destination register
     uint32_t offset)
 {
-
+  int ret = __write(proc, 0, destination, offset, data);
 #ifdef IODUMP
   printf("===== PHYSICAL MEMORY AFTER WRITING =====\n");
   printf("write region=%d offset=%d value=%d\n", destination, offset, data);
@@ -483,7 +484,7 @@ int libwrite(
   MEMPHY_dump(proc->mram);
 #endif
 
-  return __write(proc, 0, destination, offset, data);
+  return ret;
 }
 
 /*free_pcb_memphy - collect all memphy of pcb
@@ -523,11 +524,23 @@ int free_pcb_memph(struct pcb_t *caller)
 int find_victim_page(struct mm_struct *mm, int *retpgn)
 {
   struct pgn_t *pg = mm->fifo_pgn;
+  struct pgn_t *prev = NULL;
 
   /* TODO: Implement the theorical mechanism to find the victim page */
   if(!pg) return -1;
-  mm->fifo_pgn = pg->pg_next;
+  while(pg->pg_next != NULL) {
+    prev = pg;
+    pg = pg->pg_next;
+  }
+
   *retpgn = pg->pgn;
+
+  if(prev) {
+    prev->pg_next = NULL;
+  } else {
+    mm->fifo_pgn = NULL;
+  }
+  
   free(pg);
 
   return 0;

@@ -58,6 +58,14 @@
   "C_Cpp_Runner.msvcSecureNoWarnings": false,
   "files.associations": {
     "string.h": "c",
-    "*.lst": "c"
+    "*.lst": "c",
+    "mm.h": "c",
+    "cpu.h": "c",
+    "timer.h": "c",
+    "sched.h": "c",
+    "loader.h": "c",
+    "pthread.h": "c",
+    "stdio.h": "c",
+    "stdlib.h": "c"
   }
 }
