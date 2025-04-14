@@ -44,7 +44,33 @@ int enlist_vm_freerg_list(struct mm_struct *mm, struct vm_rg_struct *rg_elmt)
 
   return 0;
 }
+void VM_DUMP(struct mm_struct *mm) {
+  printf("*************************VM_DUMP***********************\n");
+  printf("-------------------------------------------------------\n");
+  for(int i=0; i<PAGING_MAX_SYMTBL_SZ; i++) {
+    printf("|SYM %d: [%lu, %lu]", i, mm->symrgtbl[i].rg_start, mm->symrgtbl[i].rg_end);
+  }
+  printf("|\n");
+  printf("-------------------------------------------------------\n");
+  struct vm_area_struct *vmait = mm->mmap;
+  int vmaid = 0;
+  while (vmait != NULL) {
+    printf("VMA %d (Range: [%lu, %lu]):\n", vmaid, vmait->vm_start, vmait->vm_end);
+    
+    struct vm_rg_struct *rg_free = vmait->vm_freerg_list;
+    while (rg_free != NULL) {
+      printf("  Free: [%lu, %lu]", rg_free->rg_start, rg_free->rg_end);
+      rg_free = rg_free->rg_next;
+      if (rg_free) printf(",");  // Thêm "," chỉ nếu còn phần tử tiếp
+      printf("\n");
+    }
+    
+    vmaid++;
+    vmait = vmait->vm_next;
+  }
+  printf("*******************************************************\n");
 
+}
 /*get_symrg_byid - get mem region by region ID
  *@mm: memory region
  *@rgid: region ID act as symbol index of variable
@@ -74,6 +100,7 @@ int __alloc(struct pcb_t *caller, int vmaid, int rgid, int size, int *alloc_addr
   /* TODO: commit the vmaid */
   if(rgid < 0 || rgid > PAGING_MAX_SYMTBL_SZ)
     return -1;
+  pthread_mutex_lock(&mmvm_lock);
 
   if (get_free_vmrg_area(caller, vmaid, size, &rgnode) == 0)
   {
@@ -132,7 +159,8 @@ int __alloc(struct pcb_t *caller, int vmaid, int rgid, int size, int *alloc_addr
  */
 int __free(struct pcb_t *caller, int vmaid, int rgid) // done
 {
-  struct vm_rg_struct rgnode;
+  pthread_mutex_lock(&mmvm_lock);
+  struct vm_rg_struct * rgnode = malloc(sizeof(struct vm_rg_struct));
 
   // Dummy initialization for avoding compiler dummay warning
   // in incompleted TODO code rgnode will overwrite through implementing
@@ -142,25 +170,15 @@ int __free(struct pcb_t *caller, int vmaid, int rgid) // done
     return -1;
 
   /* TODO: Manage the collect freed region to freerg_list */
-  rgnode = caller->mm->symrgtbl[rgid];
+  
+  *rgnode = caller->mm->symrgtbl[rgid];
+  rgnode->rg_next = NULL;
   caller->mm->symrgtbl[rgid].rg_start = 0;
   caller->mm->symrgtbl[rgid].rg_end = 0;
-
-  // int pgn_start = PAGING_PGN(rgnode.rg_start);
-  // int pgn_end = PAGING_PGN(rgnode.rg_end);
-
-  // for (int i = pgn_start; i < pgn_end; i++) {
-  //   uint32_t pte = caller->mm->pgd[i];
-  //   if (PAGING_PAGE_PRESENT(pte)) {
-  //     int fpn = PAGING_PTE_FPN(pte);
-  //     MEMPHY_put_freefp(caller->mram, fpn);
-  //   }
-  //   caller->mm->pgd[i] = 0;
-  // }
-
+  
   /*enlist the obsoleted memory region */
-  enlist_vm_freerg_list(caller->mm, &rgnode);
-
+  enlist_vm_freerg_list(caller->mm, rgnode);
+  pthread_mutex_unlock(&mmvm_lock);
   return 0;
 }
 
@@ -367,8 +385,8 @@ int pg_setval(struct mm_struct *mm, int addr, BYTE value, struct pcb_t *caller) 
    *  MEMPHY WRITE
    *  SYSCALL 17 sys_memmap with SYSMEM_IO_WRITE
    */
-  int phyaddr = fpn * PAGE_SIZE + off;
-  // int phyaddr = (fpn << PAGING_ADDR_FPN_LOBIT) + off;
+  // int phyaddr = fpn * PAGE_SIZE + off;
+  int phyaddr = (fpn << PAGING_ADDR_FPN_LOBIT) + off;
 
   struct sc_regs regs;
   regs.a1 = SYSMEM_IO_WRITE;
@@ -540,7 +558,7 @@ int find_victim_page(struct mm_struct *mm, int *retpgn)
   } else {
     mm->fifo_pgn = NULL;
   }
-  
+
   free(pg);
 
   return 0;
@@ -584,5 +602,7 @@ int get_free_vmrg_area(struct pcb_t *caller, int vmaid, int size, struct vm_rg_s
 
   return -1;
 }
+
+
 
 //#endif
