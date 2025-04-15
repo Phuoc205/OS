@@ -1,0 +1,5 @@
+20 4
+alloc 2048 0
+alloc 100 1
+write 10 0 0
+write 15 0 0

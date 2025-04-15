@@ -9,6 +9,7 @@
 */
 
 #include <string.h>
+#include <stdlib.h>
 
 #include "common.h"
 #include "syscall.h"
@@ -33,12 +34,15 @@ void get_name(struct pcb_t * caller, char * result)
         result[i+1] = buffer[i];
         i++;
     }
-    result[i] = '\0';
+    result[i+1] = '\0';
 }
 
 int __sys_killall(struct pcb_t *caller, struct sc_regs* regs)
 {
     // init
+    // char current_name[100];
+    // get_name(caller, current_name);
+    // printf("%s\n", current_name);
     char to_kill_proc_name[100];
     uint32_t data;
     uint32_t memrg = regs->a1;
@@ -56,13 +60,15 @@ int __sys_killall(struct pcb_t *caller, struct sc_regs* regs)
 
     // traverse the running list and terminate matching
     struct queue_t *run_q = caller->running_list;
+    // printf("run_q size = %d", run_q->size);
     for (int j = 0; j < run_q->size; j++) 
     {
         char name[100];
         get_name(run_q->proc[j], name);
+        // printf("run_q name = %s\n", name);
         if (strcmp(name, to_kill_proc_name) == 0) // matching logic
         { 
-            libfree(run_q->proc[j], memrg);
+            free(run_q->proc[j]);
             for (int k = j; k < run_q->size - 1; k++) 
             {
                 run_q->proc[k] = run_q->proc[k + 1];
@@ -81,8 +87,9 @@ int __sys_killall(struct pcb_t *caller, struct sc_regs* regs)
         {
             char name[100];
             get_name(queue->proc[j], name);
+            // printf("queue name = %s\n", name);
             if (strcmp(name, to_kill_proc_name) == 0) {
-                libfree(queue->proc[j], memrg);
+                free(queue->proc[j]);
                 for (int k = j; k < queue->size - 1; k++) {
                     queue->proc[k] = queue->proc[k + 1];
                 }
@@ -98,8 +105,9 @@ int __sys_killall(struct pcb_t *caller, struct sc_regs* regs)
     {
         char name[100];
         get_name(ready_queue->proc[j], name);
+        // printf("ready_queue name = %s\n", name);
         if (strcmp(name, to_kill_proc_name) == 0) { // matching
-            libfree(ready_queue->proc[j], memrg);
+            free(ready_queue->proc[j]);
             for (int k = j; k < ready_queue->size - 1; k++) {
                 ready_queue->proc[k] = ready_queue->proc[k + 1];
             }
