@@ -44,6 +44,7 @@ int enlist_vm_freerg_list(struct mm_struct *mm, struct vm_rg_struct *rg_elmt)
 
   return 0;
 }
+
 void VM_DUMP(struct mm_struct *mm) {
   printf("*************************VM_DUMP***********************\n");
   printf("-------------------------------------------------------\n");
@@ -61,7 +62,7 @@ void VM_DUMP(struct mm_struct *mm) {
     while (rg_free != NULL) {
       printf("  Free: [%lu, %lu]", rg_free->rg_start, rg_free->rg_end);
       rg_free = rg_free->rg_next;
-      if (rg_free) printf(",");  // Thêm "," chỉ nếu còn phần tử tiếp
+      if (rg_free) printf(",");
       printf("\n");
     }
     
@@ -71,6 +72,30 @@ void VM_DUMP(struct mm_struct *mm) {
   printf("*******************************************************\n");
 
 }
+
+void PGD_DUMP(struct pcb_t *caller) {
+  int pagenum, fpn;
+  uint32_t pte;
+  printf("*****************************PGD_DUMP*************************\n");
+  for(pagenum = 0; pagenum < PAGING_MAX_PGN; pagenum++)
+  {
+    pte= caller->mm->pgd[pagenum];
+    if(pte!=0) {
+      printf("PGD %d: ", pagenum);
+      if (PAGING_PAGE_PRESENT(pte))
+      {
+        fpn = PAGING_PTE_FPN(pte);
+        printf("(FPN)%d", fpn);
+      } else {
+        fpn = PAGING_PTE_SWP(pte);
+        printf("(SWAP)%d", fpn);   
+      }
+      printf("\n");
+    }
+  }
+  printf("**************************************************************\n");
+}
+
 /*get_symrg_byid - get mem region by region ID
  *@mm: memory region
  *@rgid: region ID act as symbol index of variable
@@ -262,64 +287,83 @@ int libfree(struct pcb_t *proc, uint32_t reg_index) // Đây là hàm tạm, cò
 int pg_getpage(struct mm_struct *mm, int pgn, int *fpn, struct pcb_t *caller)
 {
   uint32_t pte = mm->pgd[pgn];
-
+  VM_DUMP(caller->mm);
+  PGD_DUMP(caller);
+  printf("pte: %08x, pgn: %d", pte, pgn);
   if (!PAGING_PAGE_PRESENT(pte))
   { /* Page is not online, make it actively living */
-    int vicpgn, swpfpn; 
-    int vicfpn;
-    // uint32_t vicpte;
+    if(PAGING_PTE_SWP(pte) != 0) {
+      int vicpgn, swpfpn; 
+      int vicfpn;
+      // uint32_t vicpte;
 
-    int tgtfpn = PAGING_PTE_SWP(pte);//the target frame storing our variable
+      int tgtfpn = PAGING_PTE_SWP(pte);//the target frame storing our variable
 
-    /* TODO: Play with your paging theory here */
-    /* Find victim page */
-    if(find_victim_page(caller->mm, &vicpgn)==-1) {
-      return -3000;
+      /* TODO: Play with your paging theory here */
+      /* Find victim page */
+      if(find_victim_page(caller->mm, &vicpgn)==-1) {
+        return -3000;
+      }
+      printf("tgtfpn: %d\n", tgtfpn);
+      /* Get free frame in MEMSWP */
+      if (MEMPHY_get_freefp(caller->active_mswp, &swpfpn) == 0) {
+        return -3000;
+      }
+      printf("vicpgn: %d, vicswp: %d, tgtfpn: %d\n", vicpgn, swpfpn, tgtfpn);
+      /* TODO: Implement swap frame from MEMRAM to MEMSWP and vice versa*/
+
+      uint32_t vicpte = mm->pgd[vicpgn];
+      vicfpn = PAGING_PTE_FPN(vicpte);
+
+      /* TODO copy victim frame to swap 
+      * SWP(vicfpn <--> swpfpn)
+      * SYSCALL 17 sys_memmap 
+      * with operation SYSMEM_SWP_OP
+      */
+      struct sc_regs regs;
+      regs.a1 = SYSMEM_SWP_OP;
+      regs.a2 = vicfpn;
+      regs.a3 = swpfpn;
+      /* SYSCALL 17 sys_memmap */
+      syscall(caller, 17, &regs);
+
+      /* TODO copy target frame form swap to mem 
+      * SWP(tgtfpn <--> vicfpn)
+      * SYSCALL 17 sys_memmap
+      * with operation SYSMEM_SWP_OP
+      */
+      /* TODO copy target frame form swap to mem */ 
+      // regs.a1 = SYSMEM_SWP_OP;
+      // regs.a2 = swpfpn;
+      // regs.a3 = tgtfpn;
+      // /* SYSCALL 17 sys_memmap */
+      // syscall(caller, 17, &regs);
+      __swap_cp_page(caller->active_mswp, tgtfpn, caller->mram, vicfpn); // gọi hàm trực tiếp vì ko hỗ trợ swap ngược
+      *fpn = vicfpn;
+
+      /* Update page table */
+      // pte_set_swap(&mm->pgd[vicpgn], 0, swpfpn);
+      pte_set_swap(&mm->pgd[vicpgn], 0, tgtfpn);
+
+      /* Update its online status of the target page */
+      pte_set_fpn(&mm->pgd[pgn], vicfpn);
+
+      enlist_pgn_node(&caller->mm->fifo_pgn,pgn);
+    } else {
+      int newfpn;
+      if (MEMPHY_get_freefp(caller->mram, &newfpn) < 0) {
+        return -3000;
+      }
+
+      // Gán PTE cho trang: set frame mới và set cờ present
+      pte_set_fpn(&mm->pgd[pgn], newfpn);
+
+      // Ghi nhận page vào FIFO
+      enlist_pgn_node(&caller->mm->fifo_pgn, pgn);
+
+      // Gán lại cho *fpn
+      *fpn = newfpn;
     }
-
-    /* Get free frame in MEMSWP */
-    if (MEMPHY_get_freefp(caller->active_mswp, &swpfpn) == 0) {
-      return -3000;
-    }
-
-    /* TODO: Implement swap frame from MEMRAM to MEMSWP and vice versa*/
-
-    uint32_t vicpte = mm->pgd[vicpgn];
-    vicfpn = PAGING_PTE_FPN(vicpte);
-
-    /* TODO copy victim frame to swap 
-     * SWP(vicfpn <--> swpfpn)
-     * SYSCALL 17 sys_memmap 
-     * with operation SYSMEM_SWP_OP
-     */
-    struct sc_regs regs;
-    regs.a1 = SYSMEM_SWP_OP;
-    regs.a2 = vicfpn;
-    regs.a3 = swpfpn;
-    /* SYSCALL 17 sys_memmap */
-    syscall(caller, 17, &regs);
-
-    /* TODO copy target frame form swap to mem 
-     * SWP(tgtfpn <--> vicfpn)
-     * SYSCALL 17 sys_memmap
-     * with operation SYSMEM_SWP_OP
-     */
-    /* TODO copy target frame form swap to mem */ 
-    // regs.a1 = SYSMEM_SWP_OP;
-    // regs.a2 = swpfpn;
-    // regs.a3 = tgtfpn;
-    // /* SYSCALL 17 sys_memmap */
-    // syscall(caller, 17, &regs);
-    __swap_cp_page(caller->active_mswp, tgtfpn, caller->mram, vicfpn); // gọi hàm trực tiếp vì ko hỗ trợ swap ngược
-    *fpn = vicfpn;
-
-    /* Update page table */
-    pte_set_swap(&mm->pgd[vicpgn], 0, swpfpn);
-
-    /* Update its online status of the target page */
-    pte_set_fpn(&mm->pgd[pgn], vicfpn);
-
-    enlist_pgn_node(&caller->mm->fifo_pgn,pgn);
   }
 
   *fpn = PAGING_FPN(mm->pgd[pgn]);

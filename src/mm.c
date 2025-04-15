@@ -264,6 +264,9 @@ int init_mm(struct mm_struct *mm, struct pcb_t *caller) // done
 
   /* TODO update VMA0 next */
   vma0->vm_next = NULL;
+  for(int i=0; i<PAGING_MAX_PGN; i++) {
+    mm->pgd[i] = 0;
+  }
 
   /* Point vma owner backward */
   vma0->vm_mm = mm; 
