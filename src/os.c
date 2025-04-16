@@ -4,6 +4,7 @@
 #include "sched.h"
 #include "loader.h"
 #include "mm.h"
+#include "libmem.h"
 
 #include <pthread.h>
 #include <stdio.h>
@@ -219,6 +220,10 @@ int main(int argc, char * argv[]) {
 	}
 	struct timer_id_t * ld_event = attach_event();
 	start_timer();
+
+	for (int i = 0; i < SHARED_MEM_SIZE; i++) {
+		shm_table[i] = -1;
+	}
 
 #ifdef MM_PAGING
 	/* Init all MEMPHY include 1 MEMRAM and n of MEMSWP */

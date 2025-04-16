@@ -12,6 +12,8 @@ static uint32_t avail_pid = 1;
 #define OPT_READ	"read"
 #define OPT_WRITE	"write"
 #define OPT_SYSCALL	"syscall"
+#define OPT_SHARED  "share"
+#define OPT_ADD		"add"
 
 static enum ins_opcode_t get_opcode(char * opt) {
 	if (!strcmp(opt, OPT_CALC)) {
@@ -26,6 +28,10 @@ static enum ins_opcode_t get_opcode(char * opt) {
 		return WRITE;
 	}else if (!strcmp(opt, OPT_SYSCALL)) {
 		return SYSCALL;
+	}else if (!strcmp(opt, OPT_SHARED)) {
+		return SHARED_MEM;
+	}else if (!strcmp(opt, OPT_ADD)) {
+		return ADD;
 	}else{
 		printf("get_opcode return Opcode: %s\n", opt);
 		exit(1);
@@ -64,6 +70,7 @@ struct pcb_t * load(const char * path) {
 		case CALC:
 			break;
 		case ALLOC:
+		case ADD:
 			fscanf(
 				file,
 				"%u %u\n",
@@ -87,10 +94,17 @@ struct pcb_t * load(const char * path) {
 		case SYSCALL:
 			fgets(buf, sizeof(buf), file);
 			sscanf(buf, "%d%d%d%d",
-			           &proc->code->text[i].arg_0,
-			           &proc->code->text[i].arg_1,
-			           &proc->code->text[i].arg_2,
-			           &proc->code->text[i].arg_3
+			        &proc->code->text[i].arg_0,
+			        &proc->code->text[i].arg_1,
+			    	&proc->code->text[i].arg_2,
+			        &proc->code->text[i].arg_3
+			);
+			break;
+		case SHARED_MEM:
+			fgets(buf, sizeof(buf), file);
+			sscanf(buf, "%u %u",
+			        &proc->code->text[i].arg_0,
+			        &proc->code->text[i].arg_1
 			);
 			break;
 		default:

@@ -39,7 +39,7 @@ sched: $(SCHED_OBJ)
 syscalltbl.lst: $(SRC)/syscall.tbl
 	@echo $(OS_OBJ)
 	chmod +x $(SRC)/syscalltbl.sh
-	$(SRC)/syscalltbl.sh $< $(SRC)/$@ 
+	$(SRC)/syscalltbl.sh $< $(SRC)/$@
 	# mv $(SRC)/syscalltbl.lst $(INCLUDE)/
 
 # Compile the whole OS simulation
