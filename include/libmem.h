@@ -19,6 +19,9 @@
 #define SHARED_MEM_SIZE 32
 static int shm_table[SHARED_MEM_SIZE];
 
+#define SHARED_MEM_SIZE 32
+static int shm_table[SHARED_MEM_SIZE];
+
 extern struct vm_area_struct *get_vma_by_num(struct mm_struct *mm, int vmaid);
 int inc_vma_limit(struct pcb_t*, int, int);
 int __mm_swap_page(struct pcb_t*, int, int);
