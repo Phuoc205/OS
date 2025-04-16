@@ -96,6 +96,28 @@ void PGD_DUMP(struct pcb_t *caller) {
   printf("**************************************************************\n");
 }
 
+int shm_attach(struct pcb_t *proc, uint32_t va, uint32_t shm_key) {
+  int pgn = PAGING_PGN(va);
+
+  if (shm_key >= SHARED_MEM_SIZE) return -1;
+
+  if (shm_table[shm_key] == -1) {
+    int fpn;
+    if (MEMPHY_get_freefp(proc->mram, &fpn) < 0) {
+      return -1;
+    }
+
+    shm_table[shm_key] = fpn;
+  }
+
+  int shared_fpn = shm_table[shm_key];
+
+  pte_set_fpn(&proc->mm->pgd[pgn], shared_fpn);
+
+  enlist_pgn_node(&proc->mm->fifo_pgn, pgn);
+  return 0;
+}
+
 /*get_symrg_byid - get mem region by region ID
  *@mm: memory region
  *@rgid: region ID act as symbol index of variable

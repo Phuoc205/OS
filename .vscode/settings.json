@@ -66,6 +66,9 @@
     "loader.h": "c",
     "pthread.h": "c",
     "stdio.h": "c",
-    "stdlib.h": "c"
+    "stdlib.h": "c",
+    "libmem.h": "c",
+    "syscall.h": "c",
+    "mem.h": "c"
   }
 }

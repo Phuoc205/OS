@@ -12,6 +12,7 @@ static uint32_t avail_pid = 1;
 #define OPT_READ	"read"
 #define OPT_WRITE	"write"
 #define OPT_SYSCALL	"syscall"
+#define OPT_SHARED  "share"
 
 static enum ins_opcode_t get_opcode(char * opt) {
 	if (!strcmp(opt, OPT_CALC)) {
@@ -26,6 +27,8 @@ static enum ins_opcode_t get_opcode(char * opt) {
 		return WRITE;
 	}else if (!strcmp(opt, OPT_SYSCALL)) {
 		return SYSCALL;
+	}else if (!strcmp(opt, OPT_SHARED)) {
+		return SHARED_MEM;
 	}else{
 		printf("get_opcode return Opcode: %s\n", opt);
 		exit(1);
@@ -93,6 +96,14 @@ struct pcb_t * load(const char * path) {
 			           &proc->code->text[i].arg_3
 			);
 			break;
+		case SHARED_MEM:
+			fscanf(
+				file,
+				"%u %u\n",
+				&proc->code->text[i].arg_0,
+				&proc->code->text[i].arg_1
+			);
+			break;	
 		default:
 			printf("Opcode: %s\n", opcode);
 			exit(1);

@@ -105,6 +105,11 @@ switch (ins.opcode)
 	case SYSCALL:
 		stat = libsyscall(proc, ins.arg_0, ins.arg_1, ins.arg_2, ins.arg_3);
 		break;
+	case SHARED_MEM:
+#ifdef MM_PAGING
+		stat = shm_attach(proc, ins.arg_0, ins.arg_1);
+#endif
+		break;
 	default:
 		stat = 1;
 	}

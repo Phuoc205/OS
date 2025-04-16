@@ -1,0 +1,1 @@
+{"name":"Local: cpu","url":"c:\\Users\\LEGION\\Downloads\\test_OS\\OS\\src\\cpu.c","tests":[{"id":1744769945700,"input":"","output":""}],"interactive":false,"memoryLimit":1024,"timeLimit":3000,"srcPath":"c:\\Users\\LEGION\\Downloads\\test_OS\\OS\\src\\cpu.c","group":"local","local":true}
