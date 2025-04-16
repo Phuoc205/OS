@@ -96,15 +96,33 @@ void PGD_DUMP(struct pcb_t *caller) {
   printf("**************************************************************\n");
 }
 
+void write_int(struct pcb_t* proc, uint32_t source, uint32_t offset, int val) {
+  for (int i = 0; i < 4; i++) {
+    BYTE data = (val >> (i * 8));
+    libwrite(proc, data, source, offset + i);
+  }
+}
+
+int read_int(struct pcb_t* proc, uint32_t source, uint32_t offset) {
+  int val = 0;
+  for (int i = 0; i < 4; i++) {
+    uint32_t data;
+    libread(proc, source, offset + i, &data);
+    if(data < 0) data = 256 + data;
+    val |= ((int)(data & 0xFF)) << (i * 8);
+  }
+  return val;
+}
+
 int libadd(struct pcb_t* proc, uint32_t source, uint32_t offset)
 {
-  BYTE data;
-  __read(proc, 0, source, offset, &data);
+  // pthread_mutex_lock(&mmvm_lock);
+  int data = read_int(proc, source, offset);
+  printf("data: %d\n", data);
+  data += 1;
 
-  data++;
-
-  int ret = __write(proc, 0, source, offset, data);
-  #ifdef IODUMP
+  write_int(proc, source, offset, data);
+#ifdef IODUMP
   printf("===== PHYSICAL MEMORY AFTER ADDING =====\n");
   printf("read and add by 1 region=%d offset=%d value=%d\n", source, offset, data);
 #ifdef PAGETBL_DUMP
@@ -117,11 +135,11 @@ int libadd(struct pcb_t* proc, uint32_t source, uint32_t offset)
       printf("Page Number: %d -> Frame Number: %d\n", i, fpn);
     }
   }
-#endif
+#endif /*PAGETBL_DUMP*/
   MEMPHY_dump(proc->mram);
-#endif
+#endif /*IODUMP*/
   // pthread_mutex_unlock(&mmvm_lock);
-  return ret;
+  return 0;
 }
 
 int shm_attach(struct pcb_t *proc, uint32_t va, uint32_t shm_key) {
@@ -508,7 +526,7 @@ int libread(
   /* TODO update result of reading action*/
   //destination 
   if(val==0) {
-    *destination = (uint32_t)data;
+    *destination = data;
   }
 #ifdef IODUMP
   printf("===== PHYSICAL MEMORY AFTER READING =====\n");
