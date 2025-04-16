@@ -1,5 +1,5 @@
 INC = -Iinclude
-LIB = -lpthread
+LIB = -lpthread -lm
 
 SRC = src
 OBJ = obj

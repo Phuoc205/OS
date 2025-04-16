@@ -21,6 +21,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <pthread.h>
+#include <math.h>
 
 static pthread_mutex_t mmvm_lock = PTHREAD_MUTEX_INITIALIZER;
 
@@ -96,6 +97,7 @@ void PGD_DUMP(struct pcb_t *caller) {
   printf("**************************************************************\n");
 }
 
+<<<<<<< HEAD
 void write_int(struct pcb_t* proc, uint32_t source, uint32_t offset, int val) {
   for (int i = 0; i < 4; i++) {
     BYTE data = (val >> (i * 8));
@@ -110,12 +112,25 @@ int read_int(struct pcb_t* proc, uint32_t source, uint32_t offset) {
     libread(proc, source, offset + i, &data);
     if(data < 0) data = 256 + data;
     val |= ((int)(data & 0xFF)) << (i * 8);
+=======
+void write_int(BYTE* ram, int addr, int val) {
+  for (int i = 0; i < 4; i++) {
+      ram[addr + i] = (val >> (i * 8)) & 0xFF;
+  }
+}
+
+int read_int(BYTE* ram, int addr) {
+  int val = 0;
+  for (int i = 0; i < 4; i++) {
+      val |= ((int)(BYTE)ram[addr + i]) << (i * 8);
+>>>>>>> b22f6b7d89c3edab3a01abe36dcf10a79a55ed1b
   }
   return val;
 }
 
 int libadd(struct pcb_t* proc, uint32_t source, uint32_t offset)
 {
+<<<<<<< HEAD
   // pthread_mutex_lock(&mmvm_lock);
   int data = read_int(proc, source, offset);
   printf("data: %d\n", data);
@@ -123,6 +138,40 @@ int libadd(struct pcb_t* proc, uint32_t source, uint32_t offset)
 
   write_int(proc, source, offset, data);
 #ifdef IODUMP
+=======
+  BYTE data;
+  int value = 0;
+  int count = 0;
+  int c = 0;
+
+  //
+  int ofs = offset;
+  do 
+  {
+    __read(proc, 0, source, ofs, &data);
+    count ++;
+    ofs++;
+  }
+  while (data!=0);
+  printf("amount of byte read = %d\n", count);
+  ofs = 0;
+  do 
+  {
+    __read(proc, 0, source, ofs, &data);
+    printf("offset %d, Data %d\n", ofs, data);
+    value += ((int)data-48) * (int)pow(10, count-2-ofs);
+    ofs++;
+  }
+  while (data!=0);
+  printf("value read = %d\n", value);
+
+  // add stage
+  value ++;
+
+  // write stage
+  int ret = __write(proc, 0, source, offset, data);
+  #ifdef IODUMP
+>>>>>>> b22f6b7d89c3edab3a01abe36dcf10a79a55ed1b
   printf("===== PHYSICAL MEMORY AFTER ADDING =====\n");
   printf("read and add by 1 region=%d offset=%d value=%d\n", source, offset, data);
 #ifdef PAGETBL_DUMP
@@ -137,9 +186,15 @@ int libadd(struct pcb_t* proc, uint32_t source, uint32_t offset)
   }
 #endif /*PAGETBL_DUMP*/
   MEMPHY_dump(proc->mram);
+<<<<<<< HEAD
 #endif /*IODUMP*/
   // pthread_mutex_unlock(&mmvm_lock);
   return 0;
+=======
+#endif
+  pthread_mutex_unlock(&mmvm_lock);
+  return ret;
+>>>>>>> b22f6b7d89c3edab3a01abe36dcf10a79a55ed1b
 }
 
 int shm_attach(struct pcb_t *proc, uint32_t va, uint32_t shm_key) {
@@ -519,7 +574,7 @@ int libread(
     uint32_t offset,    // Source address = [source] + [offset]
     uint32_t* destination)
 {
-  // pthread_mutex_lock(&mmvm_lock);
+  pthread_mutex_lock(&mmvm_lock);
   BYTE data;
   int val = __read(proc, 0, source, offset, &data);
 
@@ -544,7 +599,7 @@ int libread(
 #endif
   MEMPHY_dump(proc->mram);
 #endif
-  // pthread_mutex_unlock(&mmvm_lock);
+  pthread_mutex_unlock(&mmvm_lock);
   return val;
 }
 
@@ -576,7 +631,7 @@ int libwrite(
     uint32_t destination, // Index of destination register
     uint32_t offset)
 {
-  // pthread_mutex_lock(&mmvm_lock);
+  pthread_mutex_lock(&mmvm_lock);
   int ret = __write(proc, 0, destination, offset, data);
 #ifdef IODUMP
   printf("===== PHYSICAL MEMORY AFTER WRITING =====\n");
@@ -594,7 +649,7 @@ int libwrite(
 #endif
   MEMPHY_dump(proc->mram);
 #endif
-  // pthread_mutex_unlock(&mmvm_lock);
+  pthread_mutex_unlock(&mmvm_lock);
   return ret;
 }
 
