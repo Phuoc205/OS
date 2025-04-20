@@ -96,6 +96,74 @@ void PGD_DUMP(struct pcb_t *caller) {
   printf("**************************************************************\n");
 }
 
+void write_int(struct pcb_t* proc, uint32_t source, uint32_t offset, int val) {
+  for (int i = 0; i < 4; i++) {
+    BYTE data = (val >> (i * 8));
+    libwrite(proc, data, source, offset + i);
+  }
+}
+
+int read_int(struct pcb_t* proc, uint32_t source, uint32_t offset) {
+  int val = 0;
+  for (int i = 0; i < 4; i++) {
+    uint32_t data;
+    libread(proc, source, offset + i, &data);
+    if(data < 0) data = 256 + data;
+    val |= ((int)(data & 0xFF)) << (i * 8);
+  }
+  return val;
+}
+
+int libadd(struct pcb_t* proc, uint32_t source, uint32_t offset)
+{
+  pthread_mutex_lock(&mmvm_lock);
+  int data = read_int(proc, source, offset);
+  data += 1;
+
+  write_int(proc, source, offset, data);
+  printf("data: %d\n", data);
+#ifdef IODUMP
+  printf("===== PHYSICAL MEMORY AFTER ADDING =====\n");
+  printf("read and add by 1 region=%d offset=%d value=%d\n", source, offset, data);
+#ifdef PAGETBL_DUMP
+  print_pgtbl(proc, 0, -1); //print max TBL
+  struct mm_struct *mm = proc->mm;
+  for(int i = 0; i < PAGING_MAX_PGN; i++) {
+    uint32_t pte = mm->pgd[i];
+    if(PAGING_PAGE_PRESENT(pte)) {
+      int fpn = PAGING_PTE_FPN(pte);
+      printf("Page Number: %d -> Frame Number: %d\n", i, fpn);
+    }
+  }
+#endif /*PAGETBL_DUMP*/
+  MEMPHY_dump(proc->mram);
+#endif /*IODUMP*/
+  pthread_mutex_unlock(&mmvm_lock);
+  return 0;
+}
+
+int shm_attach(struct pcb_t *proc, uint32_t va, uint32_t shm_key) {
+  int pgn = PAGING_PGN(va);
+
+  if (shm_key >= SHARED_MEM_SIZE) return -1;
+
+  if (shm_table[shm_key] == -1) {
+    int fpn;
+    if (MEMPHY_get_freefp(proc->mram, &fpn) < 0) {
+      return -1;
+    }
+
+    shm_table[shm_key] = fpn;
+  }
+
+  int shared_fpn = shm_table[shm_key];
+
+  pte_set_fpn(&proc->mm->pgd[pgn], shared_fpn);
+
+  enlist_pgn_node(&proc->mm->fifo_pgn, pgn);
+  return 0;
+}
+
 /*get_symrg_byid - get mem region by region ID
  *@mm: memory region
  *@rgid: region ID act as symbol index of variable
@@ -142,7 +210,6 @@ int __alloc(struct pcb_t *caller, int vmaid, int rgid, int size, int *alloc_addr
   /* TODO retrive current vma if needed, current comment out due to compiler redundant warning*/
   /*Attempt to increate limit to get space */
   struct vm_area_struct *cur_vma = get_vma_by_num(caller->mm, vmaid);
-
 
   // int inc_sz = PAGING_PAGE_ALIGNSZ(size);
 
@@ -451,14 +518,14 @@ int libread(
     uint32_t offset,    // Source address = [source] + [offset]
     uint32_t* destination)
 {
-  pthread_mutex_lock(&mmvm_lock);
+  // pthread_mutex_lock(&mmvm_lock);
   BYTE data;
   int val = __read(proc, 0, source, offset, &data);
 
   /* TODO update result of reading action*/
   //destination 
   if(val==0) {
-    *destination = (uint32_t)data;
+    *destination = data;
   }
 #ifdef IODUMP
   printf("===== PHYSICAL MEMORY AFTER READING =====\n");
@@ -476,7 +543,7 @@ int libread(
 #endif
   MEMPHY_dump(proc->mram);
 #endif
-  pthread_mutex_unlock(&mmvm_lock);
+  // pthread_mutex_unlock(&mmvm_lock);
   return val;
 }
 
@@ -508,7 +575,7 @@ int libwrite(
     uint32_t destination, // Index of destination register
     uint32_t offset)
 {
-  pthread_mutex_lock(&mmvm_lock);
+  // pthread_mutex_lock(&mmvm_lock);
   int ret = __write(proc, 0, destination, offset, data);
 #ifdef IODUMP
   printf("===== PHYSICAL MEMORY AFTER WRITING =====\n");
@@ -526,7 +593,7 @@ int libwrite(
 #endif
   MEMPHY_dump(proc->mram);
 #endif
-  pthread_mutex_unlock(&mmvm_lock);
+  // pthread_mutex_unlock(&mmvm_lock);
   return ret;
 }
 

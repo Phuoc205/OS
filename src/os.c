@@ -4,6 +4,7 @@
 #include "sched.h"
 #include "loader.h"
 #include "mm.h"
+#include "libmem.h"
 
 #include <pthread.h>
 #include <stdio.h>
@@ -34,7 +35,7 @@ static struct ld_args{
 	unsigned long * start_time;
 #ifdef MLQ_SCHED
 	unsigned long * prio;
-#endif
+#endif /* MLQ_SCHED */
 } ld_processes;
 int num_processes;
 
@@ -42,7 +43,6 @@ struct cpu_args {
 	struct timer_id_t * timer_id;
 	int id;
 };
-
 
 static void * cpu_routine(void * args) {
 	struct timer_id_t * timer_id = ((struct cpu_args*)args)->timer_id;
@@ -57,9 +57,9 @@ static void * cpu_routine(void * args) {
 		 	* ready queue */
 			proc = get_proc();
 			if (proc == NULL) {
-                           next_slot(timer_id);
-                           continue; /* First load failed. skip dummy load */
-                        }
+                next_slot(timer_id);
+                continue; /* First load failed. skip dummy load */
+            }
 		}else if (proc->pc == proc->code->size) {
 			/* The porcess has finish it job */
 			printf("\tCPU %d: Processed %2d has finished\n",
@@ -219,6 +219,10 @@ int main(int argc, char * argv[]) {
 	}
 	struct timer_id_t * ld_event = attach_event();
 	start_timer();
+
+	for (int i = 0; i < SHARED_MEM_SIZE; i++) {
+		shm_table[i] = -1;
+	}
 
 #ifdef MM_PAGING
 	/* Init all MEMPHY include 1 MEMRAM and n of MEMSWP */
