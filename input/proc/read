@@ -1,5 +1,7 @@
-20 4
+20 6
 share 100 0
-write 49 0 0
-write 50 0 1 
-write 52 0 2
+write 56 0 0
+write 49 0 1 
+write 57 0 2
+write 50 0 3
+write 50 0 4

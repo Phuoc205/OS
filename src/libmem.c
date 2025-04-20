@@ -141,6 +141,7 @@ int libadd(struct pcb_t* proc, uint32_t source, uint32_t offset)
 
   // add stage
   value ++;
+  printf("value after add = '%d'\n", value);
 
   // write stage
   int ret = __write(proc, 0, source, offset, data);

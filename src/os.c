@@ -35,7 +35,7 @@ static struct ld_args{
 	unsigned long * start_time;
 #ifdef MLQ_SCHED
 	unsigned long * prio;
-#endif
+#endif /* MLQ_SCHED */
 } ld_processes;
 int num_processes;
 
@@ -43,7 +43,6 @@ struct cpu_args {
 	struct timer_id_t * timer_id;
 	int id;
 };
-
 
 static void * cpu_routine(void * args) {
 	struct timer_id_t * timer_id = ((struct cpu_args*)args)->timer_id;
